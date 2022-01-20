@@ -9,18 +9,20 @@ def multi_pose_decode(heat, wh, kps, reg, hm_hp, hp_offset, K=100):
     # heat = torch.sigmoid(heat)
     # perform nms on heatmaps
     heat = _nms(heat)
-    scores, inds, clses, ys, xs = _topk(heat, K=K)
+    scores, inds, clses, ys, xs = _topk(heat, K=K)  # 获得了前K个scores对应的值和索引 类别 以及 x y 
 
     kps = _transpose_and_gather_feat(kps, inds)
+    # 经过索引后，输出的kps为对应x，y点上的34个偏移量
     kps = kps.view(batch, K, num_joints * 2)
     kps[..., ::2] += xs.view(batch, K, 1).expand(batch, K, num_joints)
     kps[..., 1::2] += ys.view(batch, K, 1).expand(batch, K, num_joints)
     # reg
+    # reg与hp用的是同一套索引
     reg = _transpose_and_gather_feat(reg, inds)
     reg = reg.view(batch, K, 2)
     xs = xs.view(batch, K, 1) + reg[:, :, 0:1]
     ys = ys.view(batch, K, 1) + reg[:, :, 1:2]
-    # wh
+    # wh与hp用的是同一套索引
     wh = _transpose_and_gather_feat(wh, inds)
     wh = wh.view(batch, K, 2)
     clses  = clses.view(batch, K, 1).float()

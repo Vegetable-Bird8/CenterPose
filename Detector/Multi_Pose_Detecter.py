@@ -54,6 +54,8 @@ class MultiPoseDetector(object):
     # c = np.array([new_width / 2., new_height / 2.], dtype=np.float32)
     # s = max(height, width) * 1.0
     # keep res
+    
+    # 这部分代码作用就是通过按位或运算，找到最接近的2的倍数-1作为最终的尺度。
     inp_height = (new_height | self.opt.pad) + 1  # 等同于 inp_height = new_height+pad +1 if new_height>pad else pad+1
     inp_width = (new_width | self.opt.pad) + 1
     c = np.array([new_width // 2, new_height // 2], dtype=np.float32)
