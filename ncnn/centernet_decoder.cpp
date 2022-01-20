@@ -214,6 +214,15 @@ void CenterPoseDecoder::decode(ncnn::Mat & heatmap  , ncnn::Mat &wh, ncnn::Mat &
 	float *reg_x = (float*)(reg.data);  // 中心点x的偏移量
 	float *reg_y = reg_x + spacial_size; // 中心点y的偏移量
 
+	int num_joints = hm_hp.c;    //人体关键点数量
+	vector<float*> kps_x(num_joints);  //初始化kps指针vector 并分配空间
+	vector<float*> kps_y(num_joints);  //初始化kps指针vector 并分配空间
+	float *tmp_point = (float*)(hps.data);
+	for (int i=0;i<num_joints;++i){
+
+		kps_x[i] = tmp_point + spacial_size * 2*i;
+		kps_y[i] = tmp_point + spacial_size *(2*i +1)
+
 	std::vector<float> ids;
 	genIds(heatmap_,fea_h, fea_w,fea_c, scoreThresh, ids);  //生成大于阈值的点的indexs 共有ids.size//4个热力点
 

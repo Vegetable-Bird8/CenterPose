@@ -37,7 +37,7 @@ def multi_pose_decode(heat, wh, kps, reg, hm_hp, hp_offset, K=100):
     thresh = 0.1
     kps = kps.view(batch, K, num_joints, 2).permute(
         0, 2, 1, 3).contiguous() # b x J x K x 2
-    reg_kps = kps.unsqueeze(3).expand(batch, num_joints, K, K, 2)
+    reg_kps = kps.unsqueeze(3).expand(batch, num_joints, K, K, 2)  # b x J x K x K x 2
     hm_score, hm_inds, hm_ys, hm_xs = _topk_channel(hm_hp, K=K) # b x J x K
     # hp_offset
     hp_offset = _transpose_and_gather_feat(
