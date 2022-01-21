@@ -1,7 +1,7 @@
 #include "centernet_decoder.h"
 #include <map>
 #include <string>
- 
+#include <cmath>
 using namespace std;
 
 CenterPoseDecoder::CenterPoseDecoder()
@@ -121,6 +121,37 @@ void CenterPoseDecoder::genIds(float * heatmap, int h, int w, int c, float thres
 		}
 	}
 }
+
+void CenterPoseDecoder::gen_hp_Ids(float * heatmap, int h, int w, int c, float thresh, std::vector<vector<float>>& ids)
+{
+
+	if (heatmap==NULL)
+	{
+		std::cout << "heatmap is nullptr,please check! " << std::endl;
+		return;
+	}
+	for (int id = 0;id<c;++id){
+		float *temp_heatmap = heatmap + h*w *id;
+		vector<float> joint;
+		for (int i = 0; i < h; i++) {
+			for (int j = 0; j < w; j++) {
+				if (temp_heatmap[ i*w + j] > thresh  ) {
+			
+					joint.push_back(i);  //保存了 行数
+					joint.push_back(j);  //保存了 列数
+					// joint.push_back(id); // 保存了 通道
+					joint.push_back(temp_heatmap[ i*w + j]); //保存对应所应点的值 
+				}
+			}
+		}
+		ids.push_back(joint);  //将当前的关节点放入索引中
+	}
+
+
+
+
+
+}
 // 非极大值抑制 ，代替了原来的top_k函数
 void CenterPoseDecoder::nms(std::vector<ObjInfo>& input, std::vector<ObjInfo>& output, float nmsthreshold,int type)
 {
@@ -214,19 +245,25 @@ void CenterPoseDecoder::decode(ncnn::Mat & heatmap  , ncnn::Mat &wh, ncnn::Mat &
 	float *reg_x = (float*)(reg.data);  // 中心点x的偏移量
 	float *reg_y = reg_x + spacial_size; // 中心点y的偏移量
 
+	float *offset_x = (float*)(hp_offset.data);  //关节点x的偏移量
+	float *offset_y = offset_x + spacial_size;	//关节点y的偏移量
+
 	int num_joints = hm_hp.c;    //人体关键点数量
 	vector<float*> kps_x(num_joints);  //初始化kps指针vector 并分配空间
 	vector<float*> kps_y(num_joints);  //初始化kps指针vector 并分配空间
 	float *tmp_point = (float*)(hps.data);
+	// 初始化hps的指针
 	for (int i=0;i<num_joints;++i){
-
 		kps_x[i] = tmp_point + spacial_size * 2*i;
-		kps_y[i] = tmp_point + spacial_size *(2*i +1)
-
-	std::vector<float> ids;
+		kps_y[i] = tmp_point + spacial_size *(2*i +1);
+	}
+	vector<float> ids;
 	genIds(heatmap_,fea_h, fea_w,fea_c, scoreThresh, ids);  //生成大于阈值的点的indexs 共有ids.size//4个热力点
+	vector<vector<float>> hp_ids;    // 保存了关节点的信息 y x and scores 共有ids.size//3个热力点
+	gen_hp_Ids(hm_hp,fea_h,fea_w,num_joints,scoreThresh,hp_ids);   
 
 	std::vector<ObjInfo> objs_tmp;
+	vector<float> hm_kps(34);
 	for (int i = 0; i < ids.size() / 4; ++i) {
 		int id_h = ids[4 * i];
 		int id_w = ids[4 * i + 1];
@@ -241,7 +278,6 @@ void CenterPoseDecoder::decode(ncnn::Mat & heatmap  , ncnn::Mat &wh, ncnn::Mat &
 
 		float o0 = reg_x[index];  // 中心点对应的偏移量
 		float o1 = reg_y[index];
-
 
 		// std::cout << s0 << " " << s1 << " " << o0 << " " << o1 << std::endl;
 		// x1，y1 为左上角的坐标 
@@ -270,7 +306,60 @@ void CenterPoseDecoder::decode(ncnn::Mat & heatmap  , ncnn::Mat &wh, ncnn::Mat &
 		float box_h = y2 - y1; //=s0?
 
 		// std::cout << objbox.x1 << " " << objbox.y1 << " " << objbox.x2 << " " << objbox.y2 << " " << objbox.label  << std::endl;
-	
+
+		// 初始化存放关节点坐标的容器
+		// hm_kps 代表用人体中心+关节坐标点偏移量计算出来的关键点坐标
+		// hp_kps 代表直接计算出来的关节点坐标
+
+		vector<float> hm_kps(34);
+		float kp_x,kp_y;  //初始化关节点偏移量的值
+		for (int j =0;j<num_joints;++j){
+			kp_x = (kps_x[j][index] + id_w) *4 >x1?(kps_x[j][index] + id_w)*4:x1;  //先判断左边界，是否大于左边界
+			kp_y = (kps_y[j][index] + id_h) *4 >y1?(kps_y[j][index] + id_h)*4:y1;
+			kp_x = kp_x < x2? kp_x:x2;   //判断右边界
+			kp_y = kp_y < y2? kp_y:y2;
+
+			vector<float> tmp_joint = hp_ids[j];   // 取出对应的关节点
+			// int length = tmp_joint.size()/4;
+			float min_dis = 100.0 ;  //初始化最小距离以及最小
+			int min_dis_ind = -1;
+			// 根据关节点热力图hm_hp计算出来的关节点坐标
+			float hp_x = -1.0 ;
+			float hp_y = -1.0 ;
+			for (int k =0;k<tmp_joint.size()/3;k++){
+				int hp_id_h = ids[3 * i];
+				int hp_id_w = ids[3 * i + 1];
+				float hp_score = ids[3 * i + 2];
+				int hp_index = hp_id_h*fea_w + hp_id_w;
+
+				float hp_offset_x = (offset_x[hp_index] + hp_id_w) *4 >0 ? (offset_x[hp_index] + hp_id_w) * 4 : 0;
+				float hp_offset_y = (offset_y[hp_index] + hp_id_h) *4 >0 ? (offset_y[hp_index] + hp_id_h) * 4 : 0;
+				if (hp_offset_x>x1 && hp_offset_x<x2 && hp_offset_y>y1 && hp_offset_y<y2){      //如果这个点在框内
+					float dis = sqrt((kp_x-hp_offset_x)*(kp_x-hp_offset_x) + (kp_y-hp_offset_y)*(kp_x-hp_offset_x));  //计算L2距离
+					if (dis<min_dis){
+						min_dis = dis;
+						min_dis_ind = k;
+						hp_x = hp_offset_x;
+						hp_y = hp_offset_y;
+					}
+				}
+				else{
+					continue;  // 如果点不在窗口内，直接跳过搜索下一个点
+				}
+			}
+			if (min_dis_ind ==-1 | min_dis>3.0){   //如果循环完毕找不到符合条件的点 或者符合条件的点与坐标之间的坐标相差过大
+				// 直接取用原来的点
+				hm_kps[2*j] = kp_x;
+				hm_kps[2*j+1] = kp_y;
+			}
+			else {
+				hm_kps[2*j] = (kp_x + hp_x)/2.0;  	//取平均值
+				hm_kps[2*j+1] = (kp_y + hp_y)/2.0;				
+			}
+
+		}
+		objbox.hps = hm_kps;
+
 		objs_tmp.push_back(objbox);
 	}
 

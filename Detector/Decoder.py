@@ -13,7 +13,7 @@ def multi_pose_decode(heat, wh, kps, reg, hm_hp, hp_offset, K=100):
 
     kps = _transpose_and_gather_feat(kps, inds)
     # 经过索引后，输出的kps为对应x，y点上的34个偏移量
-    kps = kps.view(batch, K, num_joints * 2)
+    kps = kps.view(batch, K, num_joints * 2)  # b×K ×（2j）
     kps[..., ::2] += xs.view(batch, K, 1).expand(batch, K, num_joints)
     kps[..., 1::2] += ys.view(batch, K, 1).expand(batch, K, num_joints)
     # reg
@@ -31,40 +31,46 @@ def multi_pose_decode(heat, wh, kps, reg, hm_hp, hp_offset, K=100):
     bboxes = torch.cat([xs - wh[..., 0:1] / 2, 
                         ys - wh[..., 1:2] / 2,
                         xs + wh[..., 0:1] / 2, 
-                        ys + wh[..., 1:2] / 2], dim=2)
+                        ys + wh[..., 1:2] / 2], dim=2)   # b*k*4
     # hm_hp
     hm_hp = _nms(hm_hp)
     thresh = 0.1
-    kps = kps.view(batch, K, num_joints, 2).permute(
-        0, 2, 1, 3).contiguous() # b x J x K x 2
+    kps = kps.view(batch, K, num_joints, 2).permute(0, 2, 1, 3).contiguous() # b x J x K x 2
     reg_kps = kps.unsqueeze(3).expand(batch, num_joints, K, K, 2)  # b x J x K x K x 2
     hm_score, hm_inds, hm_ys, hm_xs = _topk_channel(hm_hp, K=K) # b x J x K
     # hp_offset
     hp_offset = _transpose_and_gather_feat(
-        hp_offset, hm_inds.view(batch, -1))
+        hp_offset, hm_inds.view(batch, -1))  # 获取关节点偏移量对应的索引 
     hp_offset = hp_offset.view(batch, num_joints, K, 2)
     hm_xs = hm_xs + hp_offset[:, :, :, 0]
     hm_ys = hm_ys + hp_offset[:, :, :, 1]
 
 
-    mask = (hm_score > thresh).float()
-    hm_score = (1 - mask) * -1 + mask * hm_score
-    hm_ys = (1 - mask) * (-10000) + mask * hm_ys
+    mask = (hm_score > thresh).float()  # 筛选所有大于阈值的值，大于的地方为1 小于的地方为0
+    hm_score = (1 - mask) * -1 + mask * hm_score  # 将所有大于阈值的地方保留原来的值，小于阈值的地方变为-1
+    hm_ys = (1 - mask) * (-10000) + mask * hm_ys   # 将hm_x 和hm_y大于阈值的地方保留原来的值，小于阈值的地方变为-10000
     hm_xs = (1 - mask) * (-10000) + mask * hm_xs
+
     hm_kps = torch.stack([hm_xs, hm_ys], dim=-1).unsqueeze(
-        2).expand(batch, num_joints, K, K, 2)
+        2).expand(batch, num_joints, K, K, 2)  # b x J x K x K x 2
+    # 计算两个坐标之间的L2距离
     dist = (((reg_kps - hm_kps) ** 2).sum(dim=4) ** 0.5)
+    # 得到两套坐标距离之间的最小值和对应的索引
     min_dist, min_ind = dist.min(dim=3) # b x J x K
+    # 找对最小坐标对应的hm_hp scores
     hm_score = hm_score.gather(2, min_ind).unsqueeze(-1) # b x J x K x 1
+
     min_dist = min_dist.unsqueeze(-1)
     min_ind = min_ind.view(batch, num_joints, K, 1, 1).expand(
         batch, num_joints, K, 1, 2)
     hm_kps = hm_kps.gather(3, min_ind)
     hm_kps = hm_kps.view(batch, num_joints, K, 2)
-    l = bboxes[:, :, 0].view(batch, 1, K, 1).expand(batch, num_joints, K, 1)
+    l = bboxes[:, :, 0].view(batch, 1, K, 1).expand(batch, num_joints, K, 1)  # b*j*k*1
     t = bboxes[:, :, 1].view(batch, 1, K, 1).expand(batch, num_joints, K, 1)
     r = bboxes[:, :, 2].view(batch, 1, K, 1).expand(batch, num_joints, K, 1)
     b = bboxes[:, :, 3].view(batch, 1, K, 1).expand(batch, num_joints, K, 1)
+    # 获得边界框的上下左右坐标 
+    # 并判断在框内的坐标点
     mask = (hm_kps[..., 0:1] < l) + (hm_kps[..., 0:1] > r) + \
             (hm_kps[..., 1:2] < t) + (hm_kps[..., 1:2] > b) + \
             (hm_score < thresh) + (min_dist > (torch.max(b - t, r - l) * 0.3))

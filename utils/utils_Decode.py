@@ -41,13 +41,14 @@ def _transpose_and_gather_feat(feat, ind):
     feat = feat.view(feat.size(0), -1, feat.size(3)) 
     feat = _gather_feat(feat, ind)
     return feat
-
+# 此函数是 _topk函数的简化版本
+# 不再将所有通道放在一起比较
 def _topk_channel(scores, K=40):
     batch, cat, height, width = scores.size()
 
     topk_scores, topk_inds = torch.topk(scores.view(batch, cat, -1), K)
 
-    topk_inds = topk_inds % (height * width)
+    topk_inds = topk_inds % (height * width)  
     topk_ys = (topk_inds / width).int().float()
     topk_xs = (topk_inds % width).int().float()
 

@@ -39,6 +39,7 @@ private:
 	void dynamicScale(float in_w, float in_h);
 	void genIds(float * heatmap, int h, int w,int c, float thresh, std::vector<float> &ids);  //找出大于阈值的点的
 	void nms(std::vector<ObjInfo>& input, std::vector<ObjInfo>& output, float nmsthreshold = 0.3,int type=NMS_MIN);
+	void gen_hp_Ids(float * heatmap, int h, int w, int c, float thresh, std::vector<std::vector<float>>& ids);  //找出关节点大于阈值的点
 	void decode(ncnn::Mat & heatmap  , ncnn::Mat &wh, ncnn::Mat &reg,ncnn::Mat & hm_hp  , ncnn::Mat &hps, ncnn::Mat &hp_offset,
 		std::vector<ObjInfo>&objs, float scoreThresh, float nmsThresh);
 private:
