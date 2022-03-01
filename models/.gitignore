@@ -1,0 +1,7 @@
+model/
+
+multi_pose_dla_3x.pth
+
+multi_pose_hg_3x.pth
+
+Test.jpg

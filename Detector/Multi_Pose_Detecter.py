@@ -67,7 +67,7 @@ class MultiPoseDetector(object):
       resized_image, trans_input, (inp_width, inp_height),    # 仿射变换
       flags=cv2.INTER_LINEAR)
     inp_image = ((inp_image / 255. - self.mean) / self.std).astype(np.float32)  # 归一化
-
+    # cv 读取的图像 通道排列为 （h,w,c)
     images = inp_image.transpose(2, 0, 1).reshape(1, 3, inp_height, inp_width)  # 通道数变在前 并变为[1,3,h,w]
 
     images = torch.from_numpy(images)  # 转为tensor
@@ -107,7 +107,14 @@ class MultiPoseDetector(object):
   #   top_k_pred[:, :4] /= scale
   #   top_k_pred[:, 5:] /= scale
   #   return top_k_pred # 字典
-
+  
+      """    
+    detections shape [batch,K,40]
+    detections[0:4]  为 bboxes
+    detections[4]    为 scores
+    detections[5:39] 为 hps 单数为x 双数为y
+    detections[39]   为 clses 类别
+    """
   def post_process(self, dets, meta, scale=1):
     dets = dets.detach().cpu().numpy().reshape(1, -1, dets.shape[2])
     dets = multi_pose_post_process(
@@ -141,9 +148,10 @@ class MultiPoseDetector(object):
     dets = dets.detach().cpu().numpy().copy()
     dets[:, :, :4] *= self.opt.down_ratio
     dets[:, :, 5:39] *= self.opt.down_ratio
-    img = images[0].detach().cpu().numpy().transpose(1, 2, 0)
+    img = images[0].detach().cpu().numpy().transpose(1, 2, 0)  #恢复opencv的通道排列
     img = np.clip(((
-      img * self.std + self.mean) * 255.), 0, 255).astype(np.uint8)
+      img * self.std + self.mean) * 255.), 0, 255).astype(np.uint8)   # 通过均值和方差恢复图像色彩
+      
     pred = drawer.gen_colormap(output['hm'][0].detach().cpu().numpy())
     drawer.add_blend_img(img, pred, 'pred_hm')
     

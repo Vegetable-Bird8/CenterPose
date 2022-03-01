@@ -69,8 +69,7 @@ int CenterPoseDecoder::detect(ncnn::Mat & inblob, std::vector<ObjInfo>& objs, in
 
 	//scale 
 	dynamicScale(resized_w, resized_h);
-	ncnn::resize_bilinear(inblob, in, d_w, d_h);
-
+	ncnn::resize_bilinear(inblob, in, d_w, d_h);  //重新做成512*512的大小
 
 	float mean_vals_1[3]  = {0.485 * 255 , 0.456 * 255, 0.406 * 255} ;
 	float norm_vals_1[3]  = {1.0/0.229/255, 1.0/0.224/255, 1.0/0.225/255} ;
@@ -373,19 +372,16 @@ void CenterPoseDecoder::decode(ncnn::Mat & heatmap  , ncnn::Mat &wh, ncnn::Mat &
 
 	}
 
-	// 以下为对关节点的解码
-	int hp_h = hm_hp.h;
-	int hp_w = hm_hp.w;
-	int hp_c = hm_hp.c;
-	int spacial_size = fea_w*fea_h;  //用来确定指针跳过每个通道的元素数量
-
-	float *heatmap_ = (float*)(heatmap.data);   // 指针指向矩阵头部
-
-
-	float *wh_w = (float*)(wh.data); // wh_w 第一个通道为包围框的宽
-	float *wh_h = wh_w + spacial_size;  // wh_h 为wh的第二个通道，是包围框的高
-
-	float *reg_x = (float*)(reg.data);  // 中心点x的偏移量
-	float *reg_y = reg_x + spacial_size; // 中心点y的偏移量
 }
+
+void CenterPoseDecoder::dynamicScale(float in_w, float in_h)
+{
+	d_h = (int)(std::ceil(in_h / 32) * 32);
+	d_w = (int)(std::ceil(in_w / 32) * 32);
+
+	d_scale_h = in_h / d_h;  // 计算缩放尺度
+	d_scale_w = in_w / d_w;
+}
+
+
 

@@ -54,7 +54,8 @@ class COCO_Drawer(object):  # ipynb 代表是否用jupyter notebook打开  默�
     cv2.imshow('{}'.format(imgId), self.imgs[imgId])
     if pause:
       cv2.waitKey()
-  
+  # 将 热力图点和原图融合起来
+  # trans代表透明度
   def add_blend_img(self, back, fore, img_id='blend', trans=0.7):
     if fore.shape[0] != back.shape[0] or fore.shape[0] != back.shape[1]:
       fore = cv2.resize(fore, (back.shape[1], back.shape[0]))
@@ -65,10 +66,10 @@ class COCO_Drawer(object):  # ipynb 代表是否用jupyter notebook打开  默�
     self.imgs[img_id][self.imgs[img_id] < 0] = 0
     self.imgs[img_id] = self.imgs[img_id].astype(np.uint8).copy()
 
-
+  # 生成热力图
   def gen_colormap(self, img, output_res=None):
     img = img.copy()
-    c, h, w = img.shape[0], img.shape[1], img.shape[2]
+    c, h, w = img.shape[0], img.shape[1], img.shape[2]  # c =3 h,w = 128
     if output_res is None:
       output_res = (h * self.down_ratio, w * self.down_ratio)
     img = img.transpose(1, 2, 0).reshape(h, w, c, 1).astype(np.float32)
@@ -179,7 +180,7 @@ class COCO_Drawer(object):  # ipynb 代表是否用jupyter notebook打开  默�
 
 
 
-
+# 80*3
 color_list = np.array(
         [
             1.000, 1.000, 1.000,

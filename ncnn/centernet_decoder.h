@@ -48,6 +48,7 @@ private:
 	int d_h = 512;
 	int d_w = 512;
 
+	// 与标准的512*512大小之间的缩放尺度
 	float d_scale_h;
 	float d_scale_w;
 

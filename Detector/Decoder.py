@@ -78,7 +78,14 @@ def multi_pose_decode(heat, wh, kps, reg, hm_hp, hp_offset, K=100):
     kps = (1 - mask) * hm_kps + mask * kps
     kps = kps.permute(0, 2, 1, 3).contiguous().view(
         batch, K, num_joints * 2)
-    detections = torch.cat([bboxes, scores, kps, clses], dim=2)
+    detections = torch.cat([bboxes, scores, kps, clses], dim=2) 
+    """    
+    detections shape [batch,K,40]
+    detections[0:4]  为 bboxes
+    detections[4]    为 scores
+    detections[5:39] 为 hps 单数为x 双数为y
+    detections[39]   为 clses 类别
+    """
     
     return detections
 # def multi_pose_decode(hm, wh, hps, reg, hm_hp, hp_offset, K=100):
